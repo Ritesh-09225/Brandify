@@ -1,0 +1,652 @@
+// Brandify - AI Brand Intelligence + Art Direction + Website Generation Platform
+// Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relationships
+  projects      Project[]
+  accounts      Account[]
+  sessions      Session[]
+  
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// PROJECT & BRAND INPUT
+// ============================================
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(draft)
+  
+  // User ownership
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Brand input data
+  brandInput  BrandInput?
+  
+  // References (URLs and uploaded images)
+  references  Reference[]
+  
+  // Generated content
+  brandIntelligence BrandIntelligence?
+  visualDNA         VisualDNA?
+  brandSystem       BrandSystem?
+  artDirection      ArtDirection?
+  
+  // Assets used in the project
+  assets      Asset[]
+  
+  // Generated sites
+  sites       Site[]
+  
+  // Generations history
+  generations Generation[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  draft
+  analyzing
+  brand_ready
+  designing
+  generating
+  ready
+  error
+}
+
+model BrandInput {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Core product/brand info
+  productName     String
+  productDescription String @db.Text
+  industry        String?
+  targetAudience  String?  @db.Text
+  problemSolved   String?  @db.Text
+  mainSolution    String?  @db.Text
+  desiredCTA      String?
+  
+  // Brand personality
+  personality     String[] // Array of personality traits
+  tone            String?
+  
+  // Website intent
+  websiteGoal     String?
+  websiteIntent   String?  @db.Text
+  
+  // Additional context
+  additionalNotes String?  @db.Text
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("brand_inputs")
+}
+
+model Reference {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  type        ReferenceType
+  url         String?      // For inspiration URLs
+  imageUrl    String?      // For uploaded images
+  thumbnailUrl String?
+  fileName    String?
+  fileSize    Int?
+  mimeType    String?
+  
+  // Analysis results
+  analysis    Json?        // Stored analysis of the reference
+  
+  createdAt   DateTime     @default(now())
+  
+  @@map("references")
+}
+
+enum ReferenceType {
+  inspiration_url
+  uploaded_image
+  existing_logo
+  brand_guidelines
+}
+
+// ============================================
+// BRAND INTELLIGENCE
+// ============================================
+
+model BrandIntelligence {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Core identity
+  brandName       String
+  tagline         String?
+  description     String?  @db.Text
+  
+  // Market context
+  industry        String?
+  productType     String?
+  
+  // Audience insights
+  targetAudience  String?  @db.Text
+  userNeeds       String?  @db.Text
+  painPoints      String?  @db.Text
+  
+  // Value proposition
+  problem         String?  @db.Text
+  solution        String?  @db.Text
+  corePromise     String?
+  valuePropositions String? @db.Text
+  
+  // Positioning
+  positioning     String?  @db.Text
+  differentiators String?  @db.Text
+  
+  // Personality & tone
+  personality     String[]
+  tone            String?
+  messagingStyle  String?
+  
+  // Keywords & concepts
+  keywords        String[]
+  visualConcepts  String[]
+  
+  // Website goals
+  websiteGoal     String?
+  primaryCTA      String?
+  
+  // Provenance tracking
+  provenance      Json?    // Track what's user-provided vs AI-inferred
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("brand_intelligence")
+}
+
+// ============================================
+// VISUAL DNA
+// ============================================
+
+model VisualDNA {
+  id                String   @id @default(cuid())
+  projectId         String   @unique
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Core aesthetic
+  aesthetic         String?
+  mood              String[]
+  keywords          String[]
+  
+  // Color behavior
+  colorBehavior     String?  @db.Text
+  
+  // Typography behavior
+  typographyBehavior String? @db.Text
+  
+  // Composition & layout
+  compositionStyle  String?
+  layoutDensity     String?  // sparse | balanced | dense
+  shapeLanguage     String?  // rounded | organic | geometric | sharp
+  borderLanguage    String?  // subtle | defined | bold
+  
+  // Imagery & illustration
+  imageryStyle      String?
+  illustrationStyle String?
+  iconStyle         String?
+  
+  // Motion & texture
+  motionStyle       String?
+  textureStyle      String?
+  
+  // Background strategy
+  backgroundStrategy String?
+  
+  // Visual metaphors
+  visualMetaphors   String[]
+  
+  // Inspiration sources
+  derivedFrom       Json?    // References that influenced this VisualDNA
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("visual_dna")
+}
+
+// ============================================
+// BRAND SYSTEM (Design Tokens)
+// ============================================
+
+model BrandSystem {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Color tokens (stored as JSON for flexibility)
+  colors          Json     // Semantic color tokens
+  
+  // Typography system
+  typography      Json     // Font families, weights, sizes
+  
+  // Spacing scale
+  spacing         Json     // Spacing tokens
+  
+  // Border radii
+  radii           Json     // Border radius tokens
+  
+  // Shadows
+  shadows         Json     // Shadow tokens
+  
+  // Borders
+  borders         Json     // Border tokens
+  
+  // Component tokens
+  buttons         Json?
+  inputs          Json?
+  cards           Json?
+  navigation      Json?
+  
+  // Icons & imagery
+  icons           Json?
+  imagery         Json?
+  
+  // Motion
+  motion          Json?
+  
+  // Layout rules
+  layoutRules     Json?
+  responsiveRules Json?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("brand_systems")
+}
+
+// ============================================
+// ART DIRECTION
+// ============================================
+
+model ArtDirection {
+  id                    String   @id @default(cuid())
+  projectId             String   @unique
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Core concept
+  concept               String?  @db.Text
+  narrative             String?  @db.Text
+  
+  // Hero strategy
+  heroStrategy          String?
+  
+  // Navigation strategy
+  navigationStrategy    String?
+  
+  // Section sequence
+  sectionSequence       Json     // Ordered array of section types
+  
+  // Composition rules
+  compositionRules      Json?
+  
+  // Visual hierarchy
+  visualHierarchy       String?  @db.Text
+  
+  // Imagery strategy
+  imageryStrategy       String?  @db.Text
+  
+  // Product visualization
+  productVisualizationStrategy String? @db.Text
+  
+  // Motion strategy
+  motionStrategy        String?  @db.Text
+  
+  // CTA strategy
+  ctaStrategy           String?  @db.Text
+  
+  // Asset requirements
+  assetRequirements     Json?    // Array of AssetRequirement objects
+  
+  // Design decision trace
+  designDecisions       Json?    // Why certain decisions were made
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("art_directions")
+}
+
+// ============================================
+// ASSETS
+// ============================================
+
+model Asset {
+  id              String       @id @default(cuid())
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Asset type
+  type            AssetType
+  
+  // Source information
+  source          AssetSource
+  provider        String?      // e.g., "pexels", "unsplash", "iconify"
+  providerAssetId String?
+  
+  // URLs
+  url             String
+  thumbnailUrl    String?
+  
+  // Dimensions
+  width           Int?
+  height          Int?
+  
+  // Metadata
+  metadata        Json?        // Provider-specific metadata
+  license         String?
+  
+  // Usage context
+  usage           String?      // Where/how this asset is used
+  placement       String?      // Section/placement info
+  
+  // Provenance
+  provenance      AssetProvenance @default(ai_generated)
+  
+  // Status
+  status          AssetStatus  @default(requested)
+  
+  // Style attributes (for search/matching)
+  style           String?
+  mood            String?
+  subject         String?
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  @@map("assets")
+}
+
+enum AssetType {
+  image
+  video
+  icon
+  animation
+  logo
+  font
+}
+
+enum AssetSource {
+  user_uploaded
+  ai_generated
+  stock_provider
+  font_provider
+  icon_provider
+}
+
+enum AssetProvenance {
+  user_provided
+  verified
+  ai_generated
+  synthetic_demo
+}
+
+enum AssetStatus {
+  requested
+  searching
+  resolved
+  failed
+  approved
+  rejected
+}
+
+// ============================================
+// SITE & PAGES
+// ============================================
+
+model Site {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Site configuration (the central contract)
+  siteConfig      Json     // Full SiteConfig object
+  
+  // Site metadata
+  name            String?
+  description     String?
+  
+  // Generation info
+  generationId    String?
+  
+  // Validation results
+  validationResults Json?
+  
+  // Status
+  status          SiteStatus @default(draft)
+  
+  // Pages
+  pages           Page[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("sites")
+}
+
+enum SiteStatus {
+  draft
+  generating
+  generated
+  validated
+  published
+  error
+}
+
+model Page {
+  id          String    @id @default(cuid())
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  
+  // Page info
+  name        String
+  slug        String
+  path        String
+  title       String?
+  description String?
+  
+  // Order
+  order       Int       @default(0)
+  
+  // Sections on this page
+  sections    Section[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([siteId, slug])
+  @@map("pages")
+}
+
+model Section {
+  id          String   @id @default(cuid())
+  pageId      String
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  // Section identification
+  type        String   // e.g., "hero", "featureSpotlight", "bento"
+  variant     String   // e.g., "productDominant", "split", "centered"
+  
+  // Content
+  content     Json     // Section-specific content
+  
+  // Assets used in this section
+  assets      Json?    // Array of asset IDs or references
+  
+  // Layout configuration
+  layout      Json?
+  
+  // Style overrides
+  style       Json?
+  
+  // Order on page
+  order       Int      @default(0)
+  
+  // Regeneration metadata
+  regenerationCount Int @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("sections")
+}
+
+// ============================================
+// GENERATION TRACKING
+// ============================================
+
+model Generation {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Generation type
+  type            GenerationType
+  
+  // Status
+  status          GenerationStatus @default(pending)
+  stage           String?
+  progress        Int      @default(0)
+  message         String?
+  
+  // Input data
+  inputData       Json?
+  
+  // Output data
+  outputData      Json?
+  
+  // Events log
+  events          GenerationEvent[]
+  
+  // Error handling
+  error           String?  @db.Text
+  retryCount      Int      @default(0)
+  
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("generations")
+}
+
+enum GenerationType {
+  brand_intelligence
+  visual_dna
+  brand_system
+  art_direction
+  asset_resolution
+  site_generation
+  site_validation
+  full_pipeline
+}
+
+enum GenerationStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+}
+
+model GenerationEvent {
+  id            String   @id @default(cuid())
+  generationId  String
+  generation    Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  
+  // Event info
+  stage         String
+  status        String
+  message       String?
+  progress      Int?
+  
+  // Metadata
+  metadata      Json?
+  
+  // Timing
+  createdAt     DateTime @default(now())
+  
+  @@map("generation_events")
+}
